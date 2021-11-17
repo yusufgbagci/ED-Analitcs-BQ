@@ -1,0 +1,108 @@
+
+create table hw2.rfm as 
+SELECT
+  DISTINCT fullVisitorId, 
+  date_diff( PARSE_DATE('%Y%m%d', '20170801'),PARSE_DATE('%Y%m%d', max(date)), DAY) recency,
+  COUNT(DISTINCT visitId) frequency, SUM(hits_product_productRevenue) monetary
+FROM `data-to-insights.ecommerce.rev_transactions`
+WHERE date BETWEEN '20170201' AND '20170801'  
+GROUP BY fullVisitorId
+order by recency,frequency ;
+
+
+create or REPLACE table hw2.rfm_visit as
+SELECT A.*,
+       B.recency_visit 
+FROM `persuasive-ego-323609.hw2.rfm`  as A
+LEFT JOIN (select  distinct fullVisitorId ,date_diff( PARSE_DATE('%Y%m%d', '20170801'),PARSE_DATE('%Y%m%d', max(date)), DAY) recency_visit
+from `data-to-insights.ecommerce.all_sessions`
+group by fullVisitorId) B ON A.fullVisitorId =B.fullVisitorId 
+order by recency,frequency ;
+
+CREATE OR REPLACE MODEL
+  `persuasive-ego-323609.hw2.rfm_1` OPTIONS(MODEL_TYPE='KMEANS',
+    num_clusters=3,
+    STANDARDIZE_FEATURES = TRUE) AS
+    select * EXCEPT(fullVisitorId) 
+    from `persuasive-ego-323609.hw2.rfm` ;
+
+CREATE OR REPLACE MODEL
+  `persuasive-ego-323609.hw2.rfm_1` OPTIONS(MODEL_TYPE='KMEANS',
+    num_clusters=3,
+    STANDARDIZE_FEATURES = TRUE) AS
+    select * EXCEPT(fullVisitorId) 
+    from `persuasive-ego-323609.hw2.rfm` ;
+
+
+
+ CREATE OR REPLACE MODEL
+  `persuasive-ego-323609.hw2.rfm_2` OPTIONS(MODEL_TYPE='KMEANS',
+    num_clusters=4,
+    STANDARDIZE_FEATURES = TRUE) AS
+    select * EXCEPT(fullVisitorId) 
+    from `persuasive-ego-323609.hw2.rfm_visit` ; 
+
+-- creating table 
+
+create table  `persuasive-ego-323609.hw2.rfm_segment` as with 
+rfm as (select *  from `persuasive-ego-323609.hw2.rfm_visit`
+order by recency desc
+)
+select 
+case 
+  when CENTROID_ID = 1 then 'At Risk'
+  when CENTROID_ID = 2 then 'Elite'
+  when CENTROID_ID = 3 then 'Need Attention'
+  when CENTROID_ID = 4 then 'New Customers'
+end as segments,
+* except (nearest_centroids_distance)
+FROM ML.PREDICT(MODEL `persuasive-ego-323609.hw2.rfm_2`,
+(select * from rfm))   ;
+
+
+
+-- profit ve timeonsite.
+
+
+SELECT  hits_product_v2ProductCategory,
+        sum(totals_timeOnSite) as timeOnSite_sum,
+        sum(profit) profit
+FROM (
+    select  *,
+            (hits_product_productRevenue-hits_product_productPrice)/1000000 profit
+    from `data-to-insights.ecommerce.rev_transactions` 
+  ) as a
+inner join `persuasive-ego-323609.hw2.rfm_segment` as  b
+using(fullVisitorId)
+where hits_product_v2ProductCategory <>"(not set)" and b.segments='Need Attention'
+group by 1
+order by timeOnSite_sum desc;
+
+-- satılan ürünlerden kampanya çıkabilecek kategoriler bulundu.
+-- Satılmamış fakat potansiyel kategoriler belirlenecek???(pageview,timeonsitw fazla sipariş adeti az Profit değeride göz önünde bulundurulacak)
+
+select a.v2ProductCategory,sum(a.timeOnSite) timeOnSite_sum 
+from `data-to-insights.ecommerce.all_sessions` as a
+inner join `persuasive-ego-323609.hw2.rfm_segment` as  b
+using(fullVisitorId)
+where eCommerceAction_type	not in  ('6','7') --and b.segments='Elite'
+group by 1
+order by 2 desc;
+
+
+--- linear model Elite-- 
+create or replace model  
+`persuasive-ego-323609.hw2.Need_Attention_linear_model`
+OPTIONS(model_type = 'linear_reg', input_label_cols=['profit'],enable_global_explain=TRUE) as
+select
+*
+from
+  `persuasive-ego-323609.hw2.Need_Attention`
+
+
+
+
+
+
+
+
