@@ -1,0 +1,78 @@
+create or replace view capstone.deneme as 
+Select 
+items.id,
+items.orderDate, 
+items.productId,
+items.storeId,
+items.unitSalesCount,
+items.onPromotion
+from `data-bootcamp-323611.capstone.events` as events 
+right join  `data-bootcamp-323611.capstone.order_items` as items 
+ON events.date = items.orderDate 
+where events.date is null;
+
+create table capstone.events_item as(
+select * from `persuasive-ego-323609.capstone.events_item` where onPromotion = 'False')
+
+
+select distinct orderDate from `data-bootcamp-323611.capstone.order_items` limit 10 ;
+
+SELECT distinct orderDate
+FROM `data-bootcamp-323611.capstone.order_items` as items where items.orderDate 
+IN (SELECT date FROM `data-bootcamp-323611.capstone.events` as events WHERE events.date !=  items.orderDate) limit 10 ;
+
+select date from `data-bootcamp-323611.capstone.events` where date = '2013-07-05'
+
+
+
+-- Eventsiz dataların mean 
+SELECT avg(unitSalesCount),orderDate  FROM `persuasive-ego-323609.capstone.nonevent_item` group by 2 order by 1
+
+-- Eventli datalar mean
+select avg(unitSalesCount) as mean , date from `persuasive-ego-323609.capstone.events_item` group by 2 
+having  avg(unitSalesCount) is not null 
+order by 1 
+
+-- Eventli datalar medyan 
+select percentile_cont(unitSalesCount, 0.5 ) over() as median, 
+date from `persuasive-ego-323609.capstone.events_item` 
+order by 1
+
+-- Eventsiz dataların medyan  
+SELECT percentile_cont(unitSalesCount, 0.5 ) over() as median, orderDate  
+FROM `persuasive-ego-323609.capstone.nonevent_item` 
+ order by 1
+
+
+-- Eventli datalar medyan 
+select percentile_cont(unitSalesCount, 0.5 ) over() as median, 
+date from `persuasive-ego-323609.capstone.events_item` 
+order by 1
+
+--- Truncated mean Eventli data  
+select date, avg(unitSalesCount) tmean from 
+(select date, unitSalesCount, cume_dist() over(order by unitSalesCount) p 
+from `persuasive-ego-323609.capstone.events_item` )
+where p between 0.1 and 0.9 -
+group by 1 
+
+--- Truncated mean Eventsiz data  
+select orderDate, avg(unitSalesCount) tmean from 
+(select orderDate, unitSalesCount, cume_dist() over(order by unitSalesCount) p 
+from `persuasive-ego-323609.capstone.nonevent_item` )
+where p between 0.1 and 0.9 
+group by 1 
+
+
+--- data distruburion
+
+select q from 
+(select approx_quantiles(unitSalesCount, 100) quantiles 
+    from `persuasive-ego-323609.capstone.events_item` ), 
+    unnest(quantiles) as q
+
+
+ SELECT
+    unitSalesCount
+  FROM
+    `persuasive-ego-323609.capstone.events_item` TABLESAMPLE SYSTEM (25 PERCENT) 
